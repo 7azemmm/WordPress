@@ -29,7 +29,18 @@ jobs:
         run: |
           DATE=$(date +'%Y%m%d')
           TAR_NAME="app_${DATE}.tar.gz"
-          tar --exclude='.git' --warning=no-file-changed -czf $TAR_NAME .
+          
+          # Create clean copy first
+          mkdir -p /tmp/app_build
+          cp -r . /tmp/app_build/
+          cd /tmp/app_build
+          rm -rf .git
+          
+          # Create tar from clean copy
+          tar -czf "../$TAR_NAME" .
+          mv "../$TAR_NAME" "$GITHUB_WORKSPACE/"
+          cd "$GITHUB_WORKSPACE"
+          
           echo "TAR_NAME=$TAR_NAME" >> $GITHUB_ENV
 
       - name: Upload to S3
