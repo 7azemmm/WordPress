@@ -3,7 +3,8 @@ name: Deploy WordPress to AWS
 on:
   push:
     branches:
-      - master    
+      - master
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -29,16 +30,15 @@ jobs:
       - name: Create Build Artifact
         run: |
           DATE=$(date +'%Y%m%d')
-          TarName="app_${DATE}.tar.gz"
-          tar -czf $TarName .
-          echo "TarName=$TarName" >> $GITHUB_ENV  
+          TAR_NAME="app_${DATE}.tar.gz"
+          tar --exclude='.git' -czf $TAR_NAME .
+          echo "TAR_NAME=$TAR_NAME" >> $GITHUB_ENV  
 
       - name: Upload to S3
         run: |
-          aws s3 cp $TarName s3://${{ env.S3_BUCKET }}/
+          aws s3 cp ${{ env.TAR_NAME }} s3://${{ env.S3_BUCKET }}/
 
       - name: Get ASG Instances
-        id: asg
         run: |
           INSTANCE_IDS=$(aws autoscaling describe-auto-scaling-groups \
             --auto-scaling-group-names ${{ env.ASG_NAME }} \
@@ -48,15 +48,15 @@ jobs:
 
       - name: Deploy Build to Instances (via SSM)
         run: |
-          for ID in $INSTANCE_IDS; do
+          for ID in ${{ env.INSTANCE_IDS }}; do
             aws ssm send-command \
               --targets "Key=instanceIds,Values=$ID" \
               --document-name "AWS-RunShellScript" \
               --comment "Deploy WordPress build" \
               --parameters 'commands=[
-                "aws s3 cp s3://${{ env.S3_BUCKET }}/$TarName /tmp/",
+                "aws s3 cp s3://${{ env.S3_BUCKET }}/${{ env.TAR_NAME }} /tmp/",
                 "mkdir -p /tmp/app_extract",
-                "tar -xzf /tmp/$TarName -C /tmp/app_extract",
+                "tar -xzf /tmp/${{ env.TAR_NAME }} -C /tmp/app_extract",
                 "rsync -av --delete /tmp/app_extract/ ${{ env.APP_DIR }}/"
               ]'
           done
