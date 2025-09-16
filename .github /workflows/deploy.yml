@@ -3,8 +3,7 @@ name: Deploy WordPress to AWS
 on:
   push:
     branches:
-      - main      
-  workflow_dispatch:
+      - master    
 
 jobs:
   deploy:
