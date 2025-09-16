@@ -66,6 +66,6 @@ jobs:
                 "mkdir -p /tmp/app_extract",
                 "tar -xzf /tmp/${{ env.TAR_NAME }} -C /tmp/app_extract",
                 "sudo rsync -av --delete /tmp/app_extract/ ${{ env.APP_DIR }}/",
-                "sudo chown -R www-data:www-data ${{ env.APP_DIR }}/"
+                "sudo chown -R apache:apache ${{ env.APP_DIR }}/"
               ]'
           done
