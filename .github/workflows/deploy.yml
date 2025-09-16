@@ -1,5 +1,4 @@
 name: Deploy WordPress to AWS
-
 on:
   push:
     branches:
@@ -9,7 +8,6 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     env:
       AWS_REGION: us-east-1
       S3_BUCKET: awsprojecthazem
@@ -31,8 +29,8 @@ jobs:
         run: |
           DATE=$(date +'%Y%m%d')
           TAR_NAME="app_${DATE}.tar.gz"
-          tar --exclude='.git' -czf $TAR_NAME .
-          echo "TAR_NAME=$TAR_NAME" >> $GITHUB_ENV  
+          tar --exclude='.git' --warning=no-file-changed -czf $TAR_NAME .
+          echo "TAR_NAME=$TAR_NAME" >> $GITHUB_ENV
 
       - name: Upload to S3
         run: |
@@ -44,19 +42,19 @@ jobs:
             --auto-scaling-group-names ${{ env.ASG_NAME }} \
             --query "AutoScalingGroups[0].Instances[].InstanceId" \
             --output text)
-          echo "INSTANCE_IDS=$INSTANCE_IDS" >> $GITHUB_ENV  
+          echo "INSTANCE_IDS=$INSTANCE_IDS" >> $GITHUB_ENV
 
-      - name: Deploy Build to Instances (via SSM)
+      - name: Deploy to Instances
         run: |
           for ID in ${{ env.INSTANCE_IDS }}; do
             aws ssm send-command \
               --targets "Key=instanceIds,Values=$ID" \
               --document-name "AWS-RunShellScript" \
-              --comment "Deploy WordPress build" \
               --parameters 'commands=[
                 "aws s3 cp s3://${{ env.S3_BUCKET }}/${{ env.TAR_NAME }} /tmp/",
                 "mkdir -p /tmp/app_extract",
                 "tar -xzf /tmp/${{ env.TAR_NAME }} -C /tmp/app_extract",
-                "rsync -av --delete /tmp/app_extract/ ${{ env.APP_DIR }}/"
+                "sudo rsync -av --delete /tmp/app_extract/ ${{ env.APP_DIR }}/",
+                "sudo chown -R www-data:www-data ${{ env.APP_DIR }}/"
               ]'
           done
