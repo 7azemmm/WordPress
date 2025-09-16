@@ -1,0 +1,63 @@
+name: Deploy WordPress to AWS
+
+on:
+  push:
+    branches:
+      - master  
+  workflow_dispatch:   
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: us-east-1             
+      S3_BUCKET: awsprojecthazem         
+      ASG_NAME: Wordpress_ASG            
+      APP_DIR: /var/www/html            
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AwsPublicKey }}
+          aws-secret-access-key: ${{ secrets.AwsPrivateKey}}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Create Build Artifact
+        run: |
+          DATE=$(date +'%Y%m%d')
+          TarName="app_${DATE}.tar.gz"
+          tar -czf $TarName .
+          echo "TarName=$TarName" >> $GITHUB_ENV
+
+      - name: Upload to S3
+        run: |
+          aws s3 cp ${{ env.TarName }} s3://${{ env.S3_BUCKET }}/
+
+      - name: Get ASG Instances
+        id: asg
+        run: |
+          INSTANCE_IDS=$(aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names ${{ env.ASG_NAME }} \
+            --query "AutoScalingGroups[0].Instances[].InstanceId" \
+            --output text)
+          echo "INSTANCE_IDS=$INSTANCE_IDS" >> $GITHUB_ENV
+
+      - name: Deploy Build to Instances (via SSM)
+        run: |
+          for ID in ${{ env.INSTANCE_IDS }}; do
+            aws ssm send-command \
+              --targets "Key=instanceIds,Values=$ID" \
+              --document-name "AWS-RunShellScript" \
+              --comment "Deploy WordPress build" \
+              --parameters 'commands=[
+                "aws s3 cp s3://${{ env.S3_BUCKET }}/${{ env.TarName }} /tmp/",
+                "mkdir -p /tmp/app_extract",
+                "tar -xzf /tmp/${{ env.TarName }} -C /tmp/app_extract",
+                "rsync -av --delete /tmp/app_extract/ ${{ env.APP_DIR }}/"
+              ]'
+          done
